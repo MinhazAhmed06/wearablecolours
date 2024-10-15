@@ -24,8 +24,8 @@ print(pixel_dict(skinYCrCb))
 
 
 
-# cv2.imshow("ycrcb.png", np.hstack([image,skinYCrCb]))
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
+cv2.imshow("ycrcb.png", np.hstack([image,skinYCrCb]))
+cv2.waitKey(0)
+cv2.destroyAllWindows()
 
-# print(skinYCrCb)
+print(skinYCrCb)
