@@ -19,9 +19,9 @@ def pixel_dict(x):
     color_counts = Counter(flat_pixels)
     top_colors = color_counts.most_common(2)
     if top_colors[0][0] == (0,0,0):
-        return top_colors[1][0]
+        return '#%02x%02x%02x' % top_colors[1][0]
     else:
-        return top_colors[0][0]
+        return '#%02x%02x%02x' % top_colors[0][0]
 
 
 print(pixel_dict("image.jpg")) #image location

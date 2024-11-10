@@ -27,9 +27,9 @@ def detect_iris_color(image_path):
             color_counts = Counter(flat_pixels)
             top_colors = color_counts.most_common(5)
             if top_colors[0][0] == (0,0,0):
-                return top_colors[1][0]
+                return '#%02x%02x%02x' % top_colors[1][0]
             else:
-                return top_colors[0][0]
+                return '#%02x%02x%02x' % top_colors[0][0]
     
     return "Could not determine iris color"
 
