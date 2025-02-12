@@ -1,132 +1,125 @@
 import cv2
 import numpy as np
 from collections import Counter
-import face_recognition  
 from sklearn.cluster import KMeans
-import mediapipe as mp
+import torch
+import torchvision.transforms as std_trnsf
+import face_recognition  
+from networks import get_network
 
 
-def detect_skin_color(image_path):
-    # detecting skin pixels
-    min_YCrCb = np.array([0,133,77],np.uint8)
-    max_YCrCb = np.array([235,173,127],np.uint8)
+# def detect_skin_color(image):
+#     # detecting skin pixels
+#     min_YCrCb = np.array([0,133,77],np.uint8)
+#     max_YCrCb = np.array([235,173,127],np.uint8)
 
-    image = cv2.imread(image_path)
+#     imageYCrCb = cv2.cvtColor(image,cv2.COLOR_BGR2YCR_CB)
+#     skinRegionYCrCb = cv2.inRange(imageYCrCb,min_YCrCb,max_YCrCb)
+#     skinYCrCb = cv2.bitwise_and(image, image, mask = skinRegionYCrCb)
 
-    imageYCrCb = cv2.cvtColor(image,cv2.COLOR_BGR2YCR_CB)
-    skinRegionYCrCb = cv2.inRange(imageYCrCb,min_YCrCb,max_YCrCb)
-    skinYCrCb = cv2.bitwise_and(image, image, mask = skinRegionYCrCb)
+#     cv2.imshow('Skin Detected', skinYCrCb)
+#     cv2.waitKey(0)
+#     cv2.destroyAllWindows()
 
-    # major colourcode
-    image = cv2.cvtColor(skinYCrCb,cv2.COLOR_BGR2RGB)
-    flat_pixels = [tuple(pixel) for line in image for pixel in line]
-    color_counts = Counter(flat_pixels)
-    top_colors = color_counts.most_common(2)
-    if top_colors[0][0] == (0,0,0):
-        return '#%02x%02x%02x' % top_colors[1][0]
-    else:
-        return '#%02x%02x%02x' % top_colors[0][0]
+#     # major colourcode
+#     image = cv2.cvtColor(skinYCrCb,cv2.COLOR_BGR2RGB)
+#     flat_pixels = [tuple(pixel) for line in image for pixel in line]
+#     color_counts = Counter(flat_pixels)
+#     top_colors = color_counts.most_common(2)
+#     if top_colors[0][0] == (0,0,0):
+#         return '#%02x%02x%02x' % top_colors[1][0]
+#     else:
+#         return '#%02x%02x%02x' % top_colors[0][0]
 
 
-def detect_iris_color(image_path):
-    image = cv2.imread(image_path)
+# def detect_iris_color(image):
+#     face_landmarks_list = face_recognition.face_landmarks(image)
     
-    face_landmarks_list = face_recognition.face_landmarks(image)
+#     if not face_landmarks_list:
+#         return "No face detected"
     
-    if not face_landmarks_list:
-        return "No face detected"
-    
-    for face_landmarks in face_landmarks_list:
-        left_eye = np.array(face_landmarks['left_eye'])
-        right_eye = np.array(face_landmarks['right_eye'])
+#     for face_landmarks in face_landmarks_list:
+#         left_eye = np.array(face_landmarks['left_eye'])
+#         right_eye = np.array(face_landmarks['right_eye'])
         
-        for eye in [left_eye, right_eye]:
-            mask = np.zeros(image.shape[:2], dtype=np.uint8)
-            cv2.fillPoly(mask, [eye], 255)
+#         for eye in [left_eye, right_eye]:
+#             # Get eye center and approximate radius
+#             x_coords = eye[:, 0]
+#             y_coords = eye[:, 1]
             
-            eye_region = cv2.bitwise_and(image, image, mask=mask)
+#             # Calculate center point
+#             center_x = int(np.mean(x_coords))
+#             center_y = int(np.mean(y_coords))
             
-            rgb = cv2.cvtColor(eye_region, cv2.COLOR_BGR2RGB)
+#             # Calculate approximate iris radius (about 1/3 of eye width)
+#             eye_width = int(np.max(x_coords) - np.min(x_coords))
+#             iris_radius = int(eye_width * 0.15)  # Adjust this factor as needed
             
-            flat_pixels = [tuple(pixel) for line in rgb for pixel in line]
-            color_counts = Counter(flat_pixels)
-            top_colors = color_counts.most_common(5)
-            if top_colors[0][0] == (0,0,0):
-                return '#%02x%02x%02x' % top_colors[1][0]
-            else:
-                return '#%02x%02x%02x' % top_colors[0][0]
+#             # Create circular mask for iris
+#             mask = np.zeros(image.shape[:2], dtype=np.uint8)
+#             cv2.circle(mask, (center_x, center_y), iris_radius, 255, -1)
+            
+#             eye_region = cv2.bitwise_and(image, image, mask=mask)
+            
+#             rgb = cv2.cvtColor(eye_region, cv2.COLOR_BGR2RGB)
+#             flat_pixels = [tuple(pixel) for line in rgb for pixel in line]
+#             color_counts = Counter(flat_pixels)
+#             top_colors = color_counts.most_common(5)
+#             if top_colors[0][0] == (0,0,0):
+#                 return '#%02x%02x%02x' % top_colors[1][0]
+#             else:
+#                 return '#%02x%02x%02x' % top_colors[0][0]
     
-    return "Could not determine iris color"
+#     return "Could not determine iris color"
 
 
-def detect_hair_color(image_path):
-    image = cv2.imread(image_path)
-    if image is None:
-        raise ValueError("Could not read the image")
+def detect_hair_color(image, checkpoint_path='networks/pspnet_resnet101_sgd_lr_0.002_epoch_100_test_iou_0.918.pth'):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Load pre-trained network
+    net = get_network('pspnet_resnet101').to(device)
+    state = torch.load(checkpoint_path)
+    net.load_state_dict(state['weight'])
+    net.eval()
+
+    # Image transformations
+    transform = std_trnsf.Compose([
+        std_trnsf.ToTensor(),
+        std_trnsf.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    input_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # Initialize MediaPipe Face Mesh
-    mp_face_mesh = mp.solutions.face_mesh
-    face_mesh = mp_face_mesh.FaceMesh(
-        static_image_mode=True,
-        max_num_faces=1,
-        min_detection_confidence=0.5
-    )
+    input_tensor = transform(input_image).unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        logit = net(input_tensor)
+        pred = torch.sigmoid(logit.cpu())[0][0].data.numpy()
+        
+    mask = pred >= 0.5 
+    mask_color = input_image * mask[:, :, np.newaxis]
+
+    pixels = mask_color.reshape(-1, 3)
+    pixels = pixels[np.any(pixels > 0, axis=1)]
+
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    kmeans.fit(pixels)
+    dominant_colors = kmeans.cluster_centers_.astype(int)
     
-    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = face_mesh.process(rgb_image)
-    
-    if not results.multi_face_landmarks:
-        raise ValueError("No face detected in the image")
-    
-    landmarks = results.multi_face_landmarks[0].landmark
-    
-    height, width = image.shape[:2]
-    mask = np.zeros((height, width), dtype=np.uint8)
-    
-    # Define hair region points (approximately above the forehead)
-    hair_points = []
-    for i in [10, 108, 69, 104, 151, 337, 338, 338]:  # Key points around hairline
-        landmark = landmarks[i]
-        x = int(landmark.x * width)
-        y = int(landmark.y * height)
-        hair_points.append([x, y])
-    
-    # Create convex hull for hair region
-    hair_points = np.array(hair_points)
-    cv2.fillConvexPoly(mask, hair_points, 255)
-    
-    # Extend the hair region upward
-    top_point = np.min(hair_points[:, 1])
-    mask[0:top_point, :] = 255
-    
-    # Apply mask to image
-    hair_region = cv2.bitwise_and(rgb_image, rgb_image, mask=mask)
-    
-    # Extract non-black pixels
-    hair_pixels = hair_region[np.where((hair_region != [0,0,0]).all(axis=2))]
-    
-    if len(hair_pixels) == 0:
-        raise ValueError("No hair region detected")
-    
-    # Perform k-means clustering to find dominant colors
-    kmeans = KMeans(n_clusters=3, n_init=10)
-    kmeans.fit(hair_pixels)
-    
-    # Get the dominant color (the cluster center with the most assigned pixels)
-    labels = kmeans.labels_
-    counts = np.bincount(labels)
-    dominant_cluster = np.argmax(counts)
-    dominant_color = kmeans.cluster_centers_[dominant_cluster].astype(int)
-    
-    return '#%02x%02x%02x' % tuple(dominant_color)
+    colors = []
+    for color in dominant_colors:
+        colors.append('#%02x%02x%02x' % tuple(color))
+    return colors 
 
 
-def hexcodes(image_path):
-    hex = {
-        'skin':(detect_skin_color(image_path)),
-        'iris':(detect_iris_color(image_path)),
-        'hair':(detect_hair_color(image_path))
-    }
-    return hex
+# def hexcodes(image_path):
+#     image = cv2.imread(image_path)
+#     hex = {
+#         'skin':(detect_skin_color(image)),
+#         # 'iris':(detect_iris_color(image)),
+#         'hair':(detect_hair_color(image))
+#     }
+#     return hex
 
-print(hexcodes('image.jpg'))
+# print(hexcodes('image.jpg'))
+print(detect_hair_color(cv2.imread('image.jpg')))
